@@ -64,6 +64,26 @@ impl LogPacket {
         }
     }
 
+    pub fn encode(&mut self) -> Vec<u8> {
+        let mut buf: Vec<u8> = Vec::new();
+        self.header.payload_size = self.body.compute_size();
+        buf.write_plain(self.header);
+
+        self.body.log_session_begin.write_to(detail::LogDataChunkKey::LogSessionBegin, &mut buf);
+        self.body.log_session_end.write_to(detail::LogDataChunkKey::LogSessionEnd, &mut buf);
+        self.body.text_log.write_to(detail::LogDataChunkKey::TextLog, &mut buf);
+        self.body.line_number.write_to(detail::LogDataChunkKey::LineNumber, &mut buf);
+        self.body.file_name.write_to(detail::LogDataChunkKey::FileName, &mut buf);
+        self.body.function_name.write_to(detail::LogDataChunkKey::FunctionName, &mut buf);
+        self.body.module_name.write_to(detail::LogDataChunkKey::ModuleName, &mut buf);
+        self.body.thread_name.write_to(detail::LogDataChunkKey::ThreadName, &mut buf);
+        self.body.log_packet_drop_count.write_to(detail::LogDataChunkKey::LogPacketDropCount, &mut buf);
+        self.body.user_system_clock.write_to(detail::LogDataChunkKey::UserSystemClock, &mut buf);
+        self.body.process_name.write_to(detail::LogDataChunkKey::ProcessName, &mut buf);
+
+        buf
+    }
+
     pub fn get_process_id(&self) -> u64 {
         self.header.process_id
     }
@@ -88,6 +108,38 @@ impl LogPacket {
         self.header.flags = flags;
     }
 
+    pub fn get_severity(&self) -> detail::LogSeverity {
+        self.header.severity
+    }
+
+    pub fn set_severity(&mut self, severity: detail::LogSeverity) {
+        self.header.severity = severity;
+    }
+
+    pub fn get_verbosity(&self) -> bool {
+        self.header.verbosity
+    }
+
+    pub fn set_verbosity(&mut self, verbosity: bool) {
+        self.header.verbosity = verbosity;
+    }
+
+    pub fn get_log_session_begin(&self) -> Option<bool> {
+        Self::get_chunk_impl(self.body.log_session_begin)
+    }
+
+    pub fn set_log_session_begin(&mut self, log_session_begin: bool) {
+        self.body.log_session_begin = log_session_begin;
+    }
+
+    pub fn get_log_session_end(&self) -> Option<bool> {
+        Self::get_chunk_impl(self.body.log_session_end)
+    }
+
+    pub fn set_log_session_end(&mut self, log_session_end: bool) {
+        self.body.log_session_end = log_session_end;
+    }
+
     pub fn get_text_log(&self) -> Option<String> {
         Self::get_chunk_impl(self.body.text_log.clone())
     }
@@ -96,23 +148,67 @@ impl LogPacket {
         self.body.text_log = text_log;
     }
 
-    pub fn encode(&mut self) -> Vec<u8> {
-        let mut buf: Vec<u8> = Vec::new();
-        self.header.payload_size = self.body.compute_size();
-        buf.write_plain(self.header);
+    pub fn get_line_number(&self) -> Option<u32> {
+        Self::get_chunk_impl(self.body.line_number)
+    }
 
-        self.body.log_session_begin.write_to(detail::LogDataChunkKey::LogSessionBegin, &mut buf);
-        self.body.log_session_end.write_to(detail::LogDataChunkKey::LogSessionEnd, &mut buf);
-        self.body.text_log.write_to(detail::LogDataChunkKey::TextLog, &mut buf);
-        self.body.line_number.write_to(detail::LogDataChunkKey::LineNumber, &mut buf);
-        self.body.file_name.write_to(detail::LogDataChunkKey::FileName, &mut buf);
-        self.body.function_name.write_to(detail::LogDataChunkKey::FunctionName, &mut buf);
-        self.body.module_name.write_to(detail::LogDataChunkKey::ModuleName, &mut buf);
-        self.body.thread_name.write_to(detail::LogDataChunkKey::ThreadName, &mut buf);
-        self.body.log_packet_drop_count.write_to(detail::LogDataChunkKey::LogPacketDropCount, &mut buf);
-        self.body.user_system_clock.write_to(detail::LogDataChunkKey::UserSystemClock, &mut buf);
-        self.body.process_name.write_to(detail::LogDataChunkKey::ProcessName, &mut buf);
+    pub fn set_line_number(&mut self, line_number: u32) {
+        self.body.line_number = line_number;
+    }
 
-        buf
+    pub fn get_file_name(&self) -> Option<String> {
+        Self::get_chunk_impl(self.body.file_name.clone())
+    }
+    
+    pub fn set_file_name(&mut self, file_name: String) {
+        self.body.file_name = file_name;
+    }
+
+    pub fn get_function_name(&self) -> Option<String> {
+        Self::get_chunk_impl(self.body.function_name.clone())
+    }
+    
+    pub fn set_function_name(&mut self, function_name: String) {
+        self.body.function_name = function_name;
+    }
+
+    pub fn get_module_name(&self) -> Option<String> {
+        Self::get_chunk_impl(self.body.module_name.clone())
+    }
+    
+    pub fn set_module_name(&mut self, module_name: String) {
+        self.body.module_name = module_name;
+    }
+
+    pub fn get_thread_name(&self) -> Option<String> {
+        Self::get_chunk_impl(self.body.thread_name.clone())
+    }
+    
+    pub fn set_thread_name(&mut self, thread_name: String) {
+        self.body.thread_name = thread_name;
+    }
+
+    pub fn get_log_packet_drop_count(&self) -> Option<u64> {
+        Self::get_chunk_impl(self.body.log_packet_drop_count)
+    }
+
+    pub fn set_log_packet_drop_count(&mut self, log_packet_drop_count: u64) {
+        self.body.log_packet_drop_count = log_packet_drop_count;
+    }
+
+    pub fn get_user_system_clock(&self) -> Option<u64> {
+        Self::get_chunk_impl(self.body.user_system_clock)
+    }
+
+    pub fn set_user_system_clock(&mut self, user_system_clock: u64) {
+        self.body.user_system_clock = user_system_clock;
+    }
+
+    pub fn get_process_name(&self) -> Option<String> {
+        Self::get_chunk_impl(self.body.process_name.clone())
+    }
+    
+    pub fn set_process_name(&mut self, process_name: String) {
+        self.body.process_name = process_name;
     }
 }
