@@ -1,5 +1,6 @@
 #![no_std]
 
+#[macro_use]
 extern crate alloc;
 use core::option::Option;
 use alloc::string::String;
@@ -82,6 +83,25 @@ impl LogPacket {
         self.body.process_name.write_to(detail::LogDataChunkKey::ProcessName, &mut buf);
 
         buf
+    }
+
+    pub fn try_join(&mut self, other: Self) {
+        if self.header.flags.is_head() && !self.header.flags.is_tail() {
+            if !other.header.flags.is_head() {
+                if other.header.flags.is_tail() {
+                    self.header.flags.set_tail();
+                }
+                self.body.text_log = format!("{}{}", self.body.text_log, other.body.text_log);
+            }
+        }
+    }
+
+    pub fn is_head(&self) -> bool {
+        self.header.flags.is_head()
+    }
+
+    pub fn is_tail(&self) -> bool {
+        self.header.flags.is_tail()
     }
 
     pub fn get_process_id(&self) -> u64 {

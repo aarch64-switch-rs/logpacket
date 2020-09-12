@@ -49,20 +49,36 @@ impl LogPacketFlag {
         Self { flag: raw_flag }
     }
 
-    const fn is_impl(&self, flag: u8) -> bool {
+    const fn is_impl(self, flag: u8) -> bool {
         (self.flag & flag) != 0
     }
 
-    pub const fn is_head(&self) -> bool {
+    pub const fn set_impl(mut self, flag: u8) {
+        self.flag |= flag;
+    }
+
+    pub const fn is_head(self) -> bool {
         self.is_impl(LOG_PACKET_FLAG_HEAD)
     }
 
-    pub const fn is_tail(&self) -> bool {
+    pub const fn set_head(self) {
+        self.set_impl(LOG_PACKET_FLAG_HEAD);
+    }
+
+    pub const fn is_tail(self) -> bool {
         self.is_impl(LOG_PACKET_FLAG_TAIL)
     }
 
-    pub const fn is_little_endian(&self) -> bool {
+    pub const fn set_tail(self) {
+        self.set_impl(LOG_PACKET_FLAG_TAIL);
+    }
+
+    pub const fn is_little_endian(self) -> bool {
         self.is_impl(LOG_PACKET_FLAG_LITTLE_ENDIAN)
+    }
+
+    pub const fn set_little_endian(self) {
+        self.set_impl(LOG_PACKET_FLAG_LITTLE_ENDIAN);
     }
 }
 
