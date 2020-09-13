@@ -11,13 +11,14 @@ use detail::VecExt;
 use detail::ChunkType;
 
 pub struct LogPacket {
+    bin_header: detail::LogBinaryHeader,
     header: detail::LogPacketHeader,
     body: detail::LogPacketBody
 }
 
 impl LogPacket {
     pub fn new() -> Self {
-        Self { header: detail::LogPacketHeader::new(), body: detail::LogPacketBody::new() }
+        Self { bin_header: detail::LogBinaryHeader::empty(), header: detail::LogPacketHeader::new(), body: detail::LogPacketBody::new() }
     }
 
     #[allow(unreachable_patterns)]
@@ -25,32 +26,37 @@ impl LogPacket {
         let mut offset: usize = 0;
         let mut packet = Self::new();
         
-        if let Some(header) = data.read_plain::<detail::LogPacketHeader>(&mut offset) {
-            packet.header = header;
-            let packet_len = offset + header.payload_size as usize;
-            while offset < packet_len {
-                if let Some(chunk_header) = data.read_plain::<detail::LogDataChunkHeader>(&mut offset) {
-                    match chunk_header.key {
-                        detail::LogDataChunkKey::LogSessionBegin => packet.body.log_session_begin = bool::decode(&data, offset, chunk_header.len),
-                        detail::LogDataChunkKey::LogSessionEnd => packet.body.log_session_end = bool::decode(&data, offset, chunk_header.len),
-                        detail::LogDataChunkKey::TextLog => packet.body.text_log = String::decode(&data, offset, chunk_header.len),
-                        detail::LogDataChunkKey::LineNumber => packet.body.line_number = u32::decode(&data, offset, chunk_header.len),
-                        detail::LogDataChunkKey::FileName => packet.body.file_name = String::decode(&data, offset, chunk_header.len),
-                        detail::LogDataChunkKey::FunctionName => packet.body.function_name = String::decode(&data, offset, chunk_header.len),
-                        detail::LogDataChunkKey::ModuleName => packet.body.module_name = String::decode(&data, offset, chunk_header.len),
-                        detail::LogDataChunkKey::ThreadName => packet.body.thread_name = String::decode(&data, offset, chunk_header.len),
-                        detail::LogDataChunkKey::LogPacketDropCount => packet.body.log_packet_drop_count = u64::decode(&data, offset, chunk_header.len),
-                        detail::LogDataChunkKey::UserSystemClock => packet.body.user_system_clock = u64::decode(&data, offset, chunk_header.len),
-                        detail::LogDataChunkKey::ProcessName => packet.body.process_name = String::decode(&data, offset, chunk_header.len),
-                        _ => return None
-                    };
-                    offset += chunk_header.len as usize;
-                }
-                else {
-                    return None;
+        if let Some(bin_header) = data.read_plain::<detail::LogBinaryHeader>(&mut offset) {
+            if bin_header.magic == detail::LOG_BINARY_HEADER_MAGIC {
+                packet.bin_header = bin_header;
+                if let Some(header) = data.read_plain::<detail::LogPacketHeader>(&mut offset) {
+                    packet.header = header;
+                    let packet_len = offset + header.payload_size as usize;
+                    while offset < packet_len {
+                        if let Some(chunk_header) = data.read_plain::<detail::LogDataChunkHeader>(&mut offset) {
+                            match chunk_header.key {
+                                detail::LogDataChunkKey::LogSessionBegin => packet.body.log_session_begin = bool::decode(&data, offset, chunk_header.len),
+                                detail::LogDataChunkKey::LogSessionEnd => packet.body.log_session_end = bool::decode(&data, offset, chunk_header.len),
+                                detail::LogDataChunkKey::TextLog => packet.body.text_log = String::decode(&data, offset, chunk_header.len),
+                                detail::LogDataChunkKey::LineNumber => packet.body.line_number = u32::decode(&data, offset, chunk_header.len),
+                                detail::LogDataChunkKey::FileName => packet.body.file_name = String::decode(&data, offset, chunk_header.len),
+                                detail::LogDataChunkKey::FunctionName => packet.body.function_name = String::decode(&data, offset, chunk_header.len),
+                                detail::LogDataChunkKey::ModuleName => packet.body.module_name = String::decode(&data, offset, chunk_header.len),
+                                detail::LogDataChunkKey::ThreadName => packet.body.thread_name = String::decode(&data, offset, chunk_header.len),
+                                detail::LogDataChunkKey::LogPacketDropCount => packet.body.log_packet_drop_count = u64::decode(&data, offset, chunk_header.len),
+                                detail::LogDataChunkKey::UserSystemClock => packet.body.user_system_clock = u64::decode(&data, offset, chunk_header.len),
+                                detail::LogDataChunkKey::ProcessName => packet.body.process_name = String::decode(&data, offset, chunk_header.len),
+                                _ => return None
+                            };
+                            offset += chunk_header.len as usize;
+                        }
+                        else {
+                            return None;
+                        }
+                    }
+                    return Some(packet);
                 }
             }
-            return Some(packet);
         }
 
         None
@@ -68,6 +74,7 @@ impl LogPacket {
     pub fn encode(&mut self) -> Vec<u8> {
         let mut buf: Vec<u8> = Vec::new();
         self.header.payload_size = self.body.compute_size();
+        buf.write_plain(self.bin_header);
         buf.write_plain(self.header);
 
         self.body.log_session_begin.write_to(detail::LogDataChunkKey::LogSessionBegin, &mut buf);

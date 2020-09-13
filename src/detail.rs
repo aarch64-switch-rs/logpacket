@@ -82,6 +82,25 @@ impl LogPacketFlag {
     }
 }
 
+pub const LOG_BINARY_HEADER_MAGIC: u32 = 0x70687068; // "hphp"
+
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct LogBinaryHeader {
+    pub magic: u32,
+    pub version: u32
+}
+
+impl LogBinaryHeader {
+    pub const fn empty() -> Self {
+        Self { magic: LOG_BINARY_HEADER_MAGIC, version: 0 }
+    }
+    
+    pub const fn new(magic: u32, version: u32) -> Self {
+        Self { magic: magic, version: version }
+    }
+}
+
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct LogPacketHeader {
