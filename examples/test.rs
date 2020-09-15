@@ -12,5 +12,5 @@ fn main() {
     new_packet.set_text_log(String::from("Text log sample!"));
 
     let mut file = File::create("test.nxbinlog").unwrap();
-    file.write_all(&new_packet.encode()).unwrap();
+    file.write_all(&new_packet.encode_binlog()).unwrap();
 }

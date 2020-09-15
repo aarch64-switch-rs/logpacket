@@ -71,10 +71,12 @@ impl LogPacket {
         }
     }
 
-    pub fn encode(&mut self) -> Vec<u8> {
+    fn encode_impl(&mut self, include_bin_header: bool) -> Vec<u8> {
         let mut buf: Vec<u8> = Vec::new();
         self.header.payload_size = self.body.compute_size();
-        buf.write_plain(self.bin_header);
+        if include_bin_header {
+            buf.write_plain(self.bin_header);
+        }
         buf.write_plain(self.header);
 
         self.body.log_session_begin.write_to(detail::LogDataChunkKey::LogSessionBegin, &mut buf);
@@ -90,6 +92,14 @@ impl LogPacket {
         self.body.process_name.write_to(detail::LogDataChunkKey::ProcessName, &mut buf);
 
         buf
+    }
+
+    pub fn encode_packet(&mut self) -> Vec<u8> {
+        self.encode_impl(false)
+    }
+
+    pub fn encode_binlog(&mut self) -> Vec<u8> {
+        self.encode_impl(true)
     }
 
     pub fn try_join(&mut self, other: Self) {
