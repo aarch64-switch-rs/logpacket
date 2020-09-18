@@ -71,42 +71,83 @@ impl LogPacket {
         }
     }
 
-    fn encode_impl(&mut self, include_bin_header: bool) -> Vec<u8> {
+    fn encode_with_impl(&mut self, flags: u8, text_log: String, include_bin_header: bool) -> Vec<u8> {
         let mut buf: Vec<u8> = Vec::new();
-        self.header.payload_size = self.body.compute_size();
+        let mut cur_header = self.header;
+        cur_header.flags = flags;
+        let tmp_text_log = self.body.text_log.clone();
+        self.body.text_log = text_log.clone();
+        cur_header.payload_size = self.body.compute_size(detail::is_head_flag(flags));
         if include_bin_header {
             buf.write_plain(self.bin_header);
         }
-        buf.write_plain(self.header);
+        buf.write_plain(cur_header);
 
-        self.body.log_session_begin.write_to(detail::LogDataChunkKey::LogSessionBegin, &mut buf);
-        self.body.log_session_end.write_to(detail::LogDataChunkKey::LogSessionEnd, &mut buf);
         self.body.text_log.write_to(detail::LogDataChunkKey::TextLog, &mut buf);
-        self.body.line_number.write_to(detail::LogDataChunkKey::LineNumber, &mut buf);
-        self.body.file_name.write_to(detail::LogDataChunkKey::FileName, &mut buf);
-        self.body.function_name.write_to(detail::LogDataChunkKey::FunctionName, &mut buf);
-        self.body.module_name.write_to(detail::LogDataChunkKey::ModuleName, &mut buf);
-        self.body.thread_name.write_to(detail::LogDataChunkKey::ThreadName, &mut buf);
-        self.body.log_packet_drop_count.write_to(detail::LogDataChunkKey::LogPacketDropCount, &mut buf);
-        self.body.user_system_clock.write_to(detail::LogDataChunkKey::UserSystemClock, &mut buf);
-        self.body.process_name.write_to(detail::LogDataChunkKey::ProcessName, &mut buf);
+        if (flags & detail::LOG_PACKET_FLAG_HEAD) != 0 {
+            self.body.log_session_begin.write_to(detail::LogDataChunkKey::LogSessionBegin, &mut buf);
+            self.body.log_session_end.write_to(detail::LogDataChunkKey::LogSessionEnd, &mut buf);
+            self.body.line_number.write_to(detail::LogDataChunkKey::LineNumber, &mut buf);
+            self.body.file_name.write_to(detail::LogDataChunkKey::FileName, &mut buf);
+            self.body.function_name.write_to(detail::LogDataChunkKey::FunctionName, &mut buf);
+            self.body.module_name.write_to(detail::LogDataChunkKey::ModuleName, &mut buf);
+            self.body.thread_name.write_to(detail::LogDataChunkKey::ThreadName, &mut buf);
+            self.body.log_packet_drop_count.write_to(detail::LogDataChunkKey::LogPacketDropCount, &mut buf);
+            self.body.user_system_clock.write_to(detail::LogDataChunkKey::UserSystemClock, &mut buf);
+            self.body.process_name.write_to(detail::LogDataChunkKey::ProcessName, &mut buf);
+        }
+        self.body.text_log = tmp_text_log;
 
         buf
     }
 
-    pub fn encode_packet(&mut self) -> Vec<u8> {
+    fn encode_impl(&mut self, include_bin_header: bool) -> Vec<Vec<u8>> {
+        let mut packet_list: Vec<Vec<u8>> = Vec::new();
+
+        let mut text_log_offset: usize = 0;
+        let mut text_log_len = self.body.text_log.len();
+        loop {
+            let cur_len = core::cmp::min(text_log_len, detail::MAX_STRING_LEN as usize);
+            let cur_start = text_log_offset;
+            let cur_end = cur_start + cur_len;
+            let head_packet = text_log_offset == 0;
+            let tail_packet = text_log_len < detail::MAX_STRING_LEN as usize;
+            
+            let cur_text_log = String::from(&self.body.text_log[cur_start..cur_end]);
+            let mut flags = detail::LOG_PACKET_FLAG_LITTLE_ENDIAN;
+            if head_packet {
+                flags |= detail::LOG_PACKET_FLAG_HEAD;
+            }
+            else if tail_packet {
+                flags |= detail::LOG_PACKET_FLAG_TAIL;
+            }
+
+            let data = self.encode_with_impl(flags, cur_text_log, include_bin_header);
+            packet_list.push(data);
+
+            if tail_packet {
+                break;
+            }
+            text_log_offset += cur_len;
+            text_log_len -= cur_len;
+        }
+
+        packet_list
+    }
+
+    pub fn encode_packet(&mut self) -> Vec<Vec<u8>> {
         self.encode_impl(false)
     }
 
-    pub fn encode_binlog(&mut self) -> Vec<u8> {
+    pub fn encode_binlog(&mut self) -> Vec<Vec<u8>> {
         self.encode_impl(true)
     }
 
     pub fn try_join(&mut self, other: Self) {
-        if self.header.flags.is_head() && !self.header.flags.is_tail() {
-            if !other.header.flags.is_head() {
-                if other.header.flags.is_tail() {
-                    self.header.flags.set_tail();
+        if detail::is_head_flag(self.header.flags) && !detail::is_tail_flag(self.header.flags) {
+            if !detail::is_head_flag(other.header.flags) {
+                if detail::is_tail_flag(other.header.flags) {
+                    self.header.flags |= detail::LOG_PACKET_FLAG_TAIL;
                 }
                 self.body.text_log = format!("{}{}", self.body.text_log, other.body.text_log);
             }
@@ -114,11 +155,11 @@ impl LogPacket {
     }
 
     pub fn is_head(&self) -> bool {
-        self.header.flags.is_head()
+        detail::is_head_flag(self.header.flags)
     }
 
     pub fn is_tail(&self) -> bool {
-        self.header.flags.is_tail()
+        detail::is_tail_flag(self.header.flags)
     }
 
     pub fn get_process_id(&self) -> u64 {
@@ -137,11 +178,11 @@ impl LogPacket {
         self.header.thread_id = thread_id;
     }
 
-    pub fn get_flags(&self) -> detail::LogPacketFlag {
+    pub fn get_flags(&self) -> u8 {
         self.header.flags
     }
 
-    pub fn set_flags(&mut self, flags: detail::LogPacketFlag) {
+    pub fn set_flags(&mut self, flags: u8) {
         self.header.flags = flags;
     }
 

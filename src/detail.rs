@@ -4,12 +4,6 @@ use core::default::Default;
 use alloc::vec::Vec;
 use alloc::string::String;
 
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct LogPacketFlag {
-    flag: u8
-}
-
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 #[repr(u8)]
 pub enum LogSeverity {
@@ -36,50 +30,20 @@ pub enum LogDataChunkKey {
     ProcessName,
 }
 
-const LOG_PACKET_FLAG_HEAD: u8 = 1 << 0;
-const LOG_PACKET_FLAG_TAIL: u8 = 1 << 1;
-const LOG_PACKET_FLAG_LITTLE_ENDIAN: u8 = 1 << 2;
+pub const LOG_PACKET_FLAG_HEAD: u8 = 1 << 0;
+pub const LOG_PACKET_FLAG_TAIL: u8 = 1 << 1;
+pub const LOG_PACKET_FLAG_LITTLE_ENDIAN: u8 = 1 << 2;
 
-impl LogPacketFlag {
-    pub const fn new() -> Self {
-        Self { flag: 0 }
-    }
-    
-    pub const fn from(raw_flag: u8) -> Self {
-        Self { flag: raw_flag }
-    }
+pub const fn is_head_flag(flag: u8) -> bool {
+    (flag & LOG_PACKET_FLAG_HEAD) != 0
+}
 
-    const fn is_impl(self, flag: u8) -> bool {
-        (self.flag & flag) != 0
-    }
+pub const fn is_tail_flag(flag: u8) -> bool {
+    (flag & LOG_PACKET_FLAG_TAIL) != 0
+}
 
-    pub const fn set_impl(mut self, flag: u8) {
-        self.flag |= flag;
-    }
-
-    pub const fn is_head(self) -> bool {
-        self.is_impl(LOG_PACKET_FLAG_HEAD)
-    }
-
-    pub const fn set_head(self) {
-        self.set_impl(LOG_PACKET_FLAG_HEAD);
-    }
-
-    pub const fn is_tail(self) -> bool {
-        self.is_impl(LOG_PACKET_FLAG_TAIL)
-    }
-
-    pub const fn set_tail(self) {
-        self.set_impl(LOG_PACKET_FLAG_TAIL);
-    }
-
-    pub const fn is_little_endian(self) -> bool {
-        self.is_impl(LOG_PACKET_FLAG_LITTLE_ENDIAN)
-    }
-
-    pub const fn set_little_endian(self) {
-        self.set_impl(LOG_PACKET_FLAG_LITTLE_ENDIAN);
-    }
+pub const fn is_little_endian_flag(flag: u8) -> bool {
+    (flag & LOG_PACKET_FLAG_LITTLE_ENDIAN) != 0
 }
 
 pub const LOG_BINARY_HEADER_MAGIC: u32 = 0x70687068; // "hphp"
@@ -106,7 +70,7 @@ impl LogBinaryHeader {
 pub struct LogPacketHeader {
     pub process_id: u64,
     pub thread_id: u64,
-    pub flags: LogPacketFlag,
+    pub flags: u8,
     pub pad: u8,
     pub severity: LogSeverity,
     pub verbosity: bool,
@@ -118,7 +82,7 @@ impl LogPacketHeader {
         Self {
             process_id: 0,
             thread_id: 0,
-            flags: LogPacketFlag::from(LOG_PACKET_FLAG_HEAD | LOG_PACKET_FLAG_TAIL | LOG_PACKET_FLAG_LITTLE_ENDIAN),
+            flags: 0,
             pad: 0,
             severity: LogSeverity::Trace,
             verbosity: false,
@@ -213,7 +177,7 @@ impl PlainChunkType for bool {}
 impl PlainChunkType for u32 {}
 impl PlainChunkType for u64 {}
 
-const MAX_STRING_LEN: u8 = 0x7F;
+pub const MAX_STRING_LEN: u8 = 0x7F;
 
 impl ChunkType for String {
     fn get_len(&self) -> u8 {
@@ -304,19 +268,21 @@ impl LogPacketBody {
         }
     }
 
-    pub fn compute_size(&self) -> u32 {
+    pub fn compute_size(&self, is_head: bool) -> u32 {
         let mut size: u32 = 0;
-        size += self.log_session_begin.get_full_len();
-        size += self.log_session_end.get_full_len();
         size += self.text_log.get_full_len();
-        size += self.line_number.get_full_len();
-        size += self.file_name.get_full_len();
-        size += self.function_name.get_full_len();
-        size += self.module_name.get_full_len();
-        size += self.thread_name.get_full_len();
-        size += self.log_packet_drop_count.get_full_len();
-        size += self.user_system_clock.get_full_len();
-        size += self.process_name.get_full_len();
+        if is_head {
+            size += self.log_session_begin.get_full_len();
+            size += self.log_session_end.get_full_len();
+            size += self.line_number.get_full_len();
+            size += self.file_name.get_full_len();
+            size += self.function_name.get_full_len();
+            size += self.module_name.get_full_len();
+            size += self.thread_name.get_full_len();
+            size += self.log_packet_drop_count.get_full_len();
+            size += self.user_system_clock.get_full_len();
+            size += self.process_name.get_full_len();
+        }
         size
     }
 }

@@ -9,8 +9,12 @@ fn main() {
     new_packet.set_thread_id(0xBABE);
     new_packet.set_process_name(String::from("test-process"));
     new_packet.set_user_system_clock(59);
-    new_packet.set_text_log(String::from("Text log sample!"));
+    new_packet.set_text_log(String::from(include_str!("test.rs")));
 
-    let mut file = File::create("test.nxbinlog").unwrap();
-    file.write_all(&new_packet.encode_binlog()).unwrap();
+    let mut i: usize = 0;
+    for binlog in new_packet.encode_binlog() {
+        let mut file = File::create(format!("{:#X}.nxbinlog", i)).unwrap();
+        file.write_all(&binlog).unwrap();
+        i += 1;
+    }
 }
